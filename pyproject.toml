@@ -1,0 +1,30 @@
+[project]
+name = "progress-fitness-api"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Jean Paul Cardozo", email = "paulcardozo_01@outlook.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "alembic>=1.20.0",
+    "bcrypt<4.1",
+    "dotenv>=0.9.9",
+    "fastapi[standard]>=0.143.0",
+    "passlib[bcrypt]>=1.7.4",
+    "psycopg[binary]>=3.3.6",
+    "pydantic>=2.14.0",
+    "pytest>=9.1.1",
+    "python-jose[cryptography]>=3.5.0",
+    "resend>=2.49.1",
+    "slowapi>=0.1.10",
+    "sqlalchemy>=2.1.4",
+]
+
+[project.scripts]
+progress-fitness-api = "progress_fitness_api:main"
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
