@@ -10,19 +10,27 @@ from progress_fitness_api.core.limiter import Limit
 
 from progress_fitness_api.routers.users import router as user_router
 from progress_fitness_api.routers.plan import router as plan_router
+from progress_fitness_api.routers.sets import router as set_router
+
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Progress Fit API")
 
+# cors
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+
 # routers
-for router in (user_router, plan_router):
+for router in (user_router, plan_router, set_router):
     app.include_router(router)
 
 
 # Exception Handler
 app.state.limiter = Limit
-
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
 
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_error(request: Request, exc: RateLimitExceeded):

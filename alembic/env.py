@@ -16,6 +16,7 @@ load_dotenv()
 from progress_fitness_api.database import Base
 from progress_fitness_api.models.users import User
 from progress_fitness_api.models.plan import Plan
+from progress_fitness_api.models.sets import Set
 
 
 # this is the Alembic Config object, which provides
