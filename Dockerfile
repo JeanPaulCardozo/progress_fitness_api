@@ -1,5 +1,5 @@
 #------ Step 1: Builder -----------
-FROM python:3.14-slim AS builder
+FROM python:3.13-slim AS builder
 
 WORKDIR /app
 
@@ -13,7 +13,7 @@ COPY alembic.ini ./
 RUN uv sync --frozen --no-dev
 
 #------ Step 2: Runtime -----------
-FROM python:3.14-slim AS runtime
+FROM python:3.13-slim AS runtime
 
 WORKDIR /app
 

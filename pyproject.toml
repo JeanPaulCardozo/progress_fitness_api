@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "Jean Paul Cardozo", email = "paulcardozo_01@outlook.com" }
 ]
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 dependencies = [
     "alembic>=1.20.0",
     "bcrypt<4.1",

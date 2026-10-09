@@ -8,7 +8,7 @@ Hecha con **FastAPI**, **PostgreSQL**, **SQLAlchemy 2**, **Alembic** y **uv**.
 
 ### Requisitos
 
-- [uv](https://docs.astral.sh/uv/) (instala Python 3.14 por su cuenta si no lo tienes)
+- [uv](https://docs.astral.sh/uv/) (instala Python 3.13 por su cuenta si no lo tienes)
 - PostgreSQL con una base de datos creada para el proyecto
 
 ### 1. Instalar dependencias
