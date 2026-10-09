@@ -14,6 +14,7 @@ class UserCreate(UserBase):
 class UserUpdate(UserBase):
     pass
 
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
