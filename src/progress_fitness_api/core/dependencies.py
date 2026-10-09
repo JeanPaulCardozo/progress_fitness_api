@@ -17,20 +17,20 @@ def get_current_user(
     exception = HTTPException(status_code=401, headers={"WWW-Authenticate": "Bearer"})
 
     if token is None:
-        return exception
+        raise exception
 
     payload = decode_access_token(token)
 
     if payload is None:
-        return exception
+        raise exception
 
-    user_id = int(payload.get("sub"))
-    if user_id is None:
-        return exception
-
-    user = get_user_by_id(db, user_id)
+    sub = payload.get("sub")
+    if sub is None:
+        raise exception
+    
+    user = get_user_by_id(db, int(sub))
 
     if user is None:
-        return exception
+        raise exception
 
     return user
