@@ -19,7 +19,7 @@ app = FastAPI(title="Progress Fit API")
 # cors
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://jeanpaulcardozo.github.io","http://localhost:5174"],
     allow_methods=["*"],
     allow_headers=["Authorization", "Content-Type"],
 )
