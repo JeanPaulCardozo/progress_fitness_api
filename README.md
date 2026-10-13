@@ -207,6 +207,22 @@ uv run alembic upgrade head
 
 Revisa el archivo generado en `alembic/versions/` antes de aplicarlo, porque el autogenerate no detecta todos los cambios.
 
+## Pruebas
+
+Las pruebas necesitan un PostgreSQL **propio**: crean y borran las tablas en cada ejecución. Nunca uses la base de `DATABASE_URL`. La forma más rápida es un contenedor temporal:
+
+```bash
+docker run -d --rm --name pf-test-db -e POSTGRES_PASSWORD=test -e POSTGRES_DB=progress_fitness_test -p 55432:5432 postgres:16
+
+TEST_DATABASE_URL=postgresql+psycopg://postgres:test@localhost:55432/progress_fitness_test uv run pytest
+
+docker stop pf-test-db
+```
+
+En PowerShell, define la variable antes: `$env:TEST_DATABASE_URL = "postgresql+psycopg://postgres:test@localhost:55432/progress_fitness_test"`.
+
+Sin `TEST_DATABASE_URL`, pytest se detiene sin importar la app. Los correos no se envían: las pruebas los capturan.
+
 ## Pendiente
 
 - Recuperar contraseña: `POST /auth/forgot-password` con `{ email }`, que envía por correo un enlace con un token de un solo uso, y `POST /auth/reset-password` con `{ token, password }`.
