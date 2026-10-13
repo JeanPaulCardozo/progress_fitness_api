@@ -33,4 +33,8 @@ def get_current_user(
     if user is None:
         raise exception
 
+    iat = payload.get("iat", 0)
+    if user.password_changed_at and iat < user.password_changed_at.timestamp():
+        raise exception
+
     return user

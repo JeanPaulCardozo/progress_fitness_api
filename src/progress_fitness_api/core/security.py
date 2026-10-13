@@ -33,8 +33,9 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire, "iat": now.timestamp()})
 
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -76,6 +77,7 @@ def reset_password(db: Session, token: str, password: str) -> bool:
         return False
 
     user.hashed_password = hash_password(password)
+    user.password_changed_at = datetime.now(timezone.utc)
     user.reset_token_expires = None
     user.reset_token_hash = None
 

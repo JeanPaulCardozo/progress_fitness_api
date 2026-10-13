@@ -171,6 +171,25 @@ def test_new_reset_request_invalidates_the_previous_link(client, sent_emails):
     )
 
 
+def test_reset_password_closes_open_sessions(client, sent_emails):
+    register(client)
+    old = {"Authorization": f"Bearer {login(client).json()['access_token']}"}
+    assert client.get("/auth/me", headers=old).status_code == 200
+
+    client.post("/auth/forgot-password", json={"email": "ana@correo.com"})
+    token = reset_token_from(sent_emails[0][1])
+    client.post(
+        "/auth/reset-password", json={"token": token, "password": "nueva-clave"}
+    )
+
+    # Login y cambio ocurren en el mismo segundo: solo pasa porque iat lleva decimales
+    assert client.get("/auth/me", headers=old).status_code == 401
+
+    new_token = login(client, password="nueva-clave").json()["access_token"]
+    new = {"Authorization": f"Bearer {new_token}"}
+    assert client.get("/auth/me", headers=new).status_code == 200
+
+
 # ── CORS ──
 
 
