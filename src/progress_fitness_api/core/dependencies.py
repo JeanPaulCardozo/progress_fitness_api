@@ -27,7 +27,7 @@ def get_current_user(
     sub = payload.get("sub")
     if sub is None:
         raise exception
-    
+
     user = get_user_by_id(db, int(sub))
 
     if user is None:

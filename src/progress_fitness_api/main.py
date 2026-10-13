@@ -19,7 +19,7 @@ app = FastAPI(title="Progress Fit API")
 # cors
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://jeanpaulcardozo.github.io","http://localhost:5174"],
+    allow_origins=["https://jeanpaulcardozo.github.io", "http://localhost:5174"],
     allow_methods=["*"],
     allow_headers=["Authorization", "Content-Type"],
 )
@@ -31,6 +31,7 @@ for router in (user_router, plan_router, set_router):
 
 # Exception Handler
 app.state.limiter = Limit
+
 
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_error(request: Request, exc: RateLimitExceeded):

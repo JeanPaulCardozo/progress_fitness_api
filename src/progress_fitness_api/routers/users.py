@@ -1,16 +1,30 @@
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
 
 from sqlalchemy.orm import Session
 
-from progress_fitness_api.schemas.users import UserCreate, Token, UserOut
+from progress_fitness_api.schemas.users import (
+    UserCreate,
+    Token,
+    UserOut,
+    ForgotPasswordIn,
+    ResetPasswordIn,
+)
 from progress_fitness_api.database import get_db
 from progress_fitness_api.core.dependencies import get_current_user
-from progress_fitness_api.core.security import create_access_token
+from progress_fitness_api.core.security import (
+    create_access_token,
+    create_reset_token,
+    reset_password,
+)
 from progress_fitness_api.services import user_service
 from progress_fitness_api.models.users import User
 from progress_fitness_api.core.limiter import Limit
+from progress_fitness_api.core.email import send_reset_email
 
+import os
+
+FRONTEND_URL = os.getenv("FRONTEND_URL")
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -42,6 +56,31 @@ def login_user(
     access_token = create_access_token(data={"sub": str(user.id)})
 
     return Token(access_token=access_token)
+
+
+@router.post("/forgot-password", status_code=204)
+@Limit.limit("5/minute")
+def forgot_password(
+    background: BackgroundTasks,
+    data: ForgotPasswordIn,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = user_service.get_user_by_email(db, data.email)
+
+    if user is not None:
+        token = create_reset_token(db, user)
+        background.add_task(
+            send_reset_email, data.email, f"{FRONTEND_URL}/?reset={token}"
+        )
+
+
+@router.post("/reset-password", status_code=204)
+def restart_password(data: ResetPasswordIn, db: Session = Depends(get_db)):
+    if not reset_password(db, data.token, data.password):
+        raise HTTPException(
+            status_code=400, detail="El enlace no es válido o ya caducó"
+        )
 
 
 @router.get("/me", response_model=UserOut, status_code=200)

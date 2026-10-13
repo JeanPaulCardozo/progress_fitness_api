@@ -1,4 +1,4 @@
-from sqlalchemy import Integer, String, Column
+from sqlalchemy import Integer, String, Column, DateTime
 
 from progress_fitness_api.database import Base
 
@@ -10,3 +10,5 @@ class User(Base):
     name = Column(String, nullable=False)
     email = Column(String, nullable=False, index=True, unique=True)
     hashed_password = Column(String, nullable=False)
+    reset_token_hash = Column(String, nullable=True, unique=True)
+    reset_token_expires = Column(DateTime(timezone=True), nullable=True)

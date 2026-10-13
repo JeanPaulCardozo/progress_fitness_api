@@ -20,6 +20,15 @@ class Token(BaseModel):
     token_type: str = "bearer"
 
 
+class ForgotPasswordIn(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordIn(BaseModel):
+    token: str
+    password: str = Field(..., min_length=8)
+
+
 class UserOut(BaseModel):
     id: int
     name: str
