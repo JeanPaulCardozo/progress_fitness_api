@@ -10,7 +10,10 @@ TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 
 if not TEST_DATABASE_URL:
     # Se detiene antes de importar la app, así nunca toca la base real
-    pytest.exit("Define TEST_DATABASE_URL para ejecutar las pruebas (ver tests/conftest.py)", returncode=4)
+    pytest.exit(
+        "Define TEST_DATABASE_URL para ejecutar las pruebas (ver tests/conftest.py)",
+        returncode=4,
+    )
 
 # Antes de importar la app: así ningún módulo llega a apuntar a la base real ni usa los secretos del .env
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
@@ -53,7 +56,9 @@ def db():
 def sent_emails(monkeypatch):
     """Guarda los correos en una lista en lugar de enviarlos con Resend."""
     sent = []
-    monkeypatch.setattr(users_router, "send_reset_email", lambda to, link: sent.append((to, link)))
+    monkeypatch.setattr(
+        users_router, "send_reset_email", lambda to, link: sent.append((to, link))
+    )
     return sent
 
 
@@ -75,7 +80,9 @@ def client(db, sent_emails):
 
 
 def register(client, email="ana@correo.com", password="secreta123", name="Ana"):
-    return client.post("/auth/register", json={"name": name, "email": email, "password": password})
+    return client.post(
+        "/auth/register", json={"name": name, "email": email, "password": password}
+    )
 
 
 def login(client, email="ana@correo.com", password="secreta123"):

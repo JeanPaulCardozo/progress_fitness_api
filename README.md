@@ -27,6 +27,12 @@ Copia `src/progress_fitness_api/.env_example` a `src/progress_fitness_api/.env` 
 | `SECRET_KEY` | Clave para firmar los tokens JWT. Debe ser larga y secreta | `python -c "import secrets; print(secrets.token_hex(32))"` |
 | `ALGORITHM` | Algoritmo del JWT (por defecto `HS256`) | `HS256` |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Duración del token (por defecto 120) | `120` |
+| `FRONTEND_URL` | Dirección del frontend, sin barra final. Se usa para armar el enlace del correo de recuperación | `http://localhost:5174` |
+| `RESET_MINUTES` | Minutos que vale el enlace de recuperación (por defecto 10). El correo muestra este mismo valor | `10` |
+| `RESEND_API_KEY` | Clave de [Resend](https://resend.com) para enviar correos. Si está vacía, el enlace se imprime en la consola | `re_xxxxxxxx` |
+| `EMAIL_FROM` | Remitente de los correos | `ProgressFit <onboarding@resend.dev>` |
+
+Sin un dominio verificado en Resend, el remitente tiene que ser `onboarding@resend.dev`, y solo se pueden enviar correos a la dirección de tu propia cuenta de Resend. Para enviar a cualquier usuario hay que verificar un dominio.
 
 Las variables `POSTGRESS_USER`, `POSTGRESS_PASS` y `POSTGRESS_DB` del ejemplo no las usa el código. La conexión sale solo de `DATABASE_URL`.
 
@@ -77,7 +83,7 @@ Si PostgreSQL corre en tu máquina y no en otro contenedor, dentro de `DATABASE_
   ```
   Los errores de validación (`422`) indican el campo: `"day: Input should be less than or equal to 7"`.
 - `/plan/` y `/sets/` llevan **barra final**. Sin ella, FastAPI responde con una redirección `307`.
-- CORS está abierto a cualquier origen, así que se puede consumir desde el navegador.
+- Desde el navegador, CORS solo permite dos orígenes: `https://jeanpaulcardozo.github.io` (la app publicada) y `http://localhost:5174` (el frontend en desarrollo). Para agregar otro, edita `allow_origins` en `main.py`. CORS no afecta a curl, Postman ni a otros servidores: lo que protege los datos es el token.
 
 ### Autenticación
 
@@ -86,10 +92,12 @@ Si PostgreSQL corre en tu máquina y no en otro contenedor, dentro de `DATABASE_
 | POST | `/auth/register` | `{ name, email, password }` | `201` con el usuario. `400` si el correo ya existe |
 | POST | `/auth/login` | formulario: `username` (el correo) y `password` | `200 { access_token, token_type }`. `401` si los datos no coinciden |
 | GET | `/auth/me` 🔒 | | `200` con el usuario |
+| POST | `/auth/forgot-password` | `{ email }` | `204` siempre, exista o no la cuenta |
+| POST | `/auth/reset-password` | `{ token, password }` | `204`. `400` si el enlace no es válido, ya caducó o ya se usó |
 
 - `password` necesita al menos 8 caracteres y `email` tiene que ser un correo válido.
 - El registro **no** devuelve token: después de registrarse hay que hacer login.
-- El login acepta 5 intentos por minuto desde una misma IP. Después responde `429`.
+- El login y `forgot-password` aceptan 5 peticiones por minuto desde una misma IP. Después responden `429`.
 - El login usa el formato estándar de OAuth2 (`application/x-www-form-urlencoded`). Por eso el campo se llama `username` aunque contiene el correo, y por eso funciona el botón **Authorize** de `/docs`.
 
 ```bash
@@ -109,6 +117,29 @@ Usuario:
 ```json
 { "id": 1, "name": "Ana", "email": "ana@correo.com" }
 ```
+
+### Recuperar la contraseña
+
+1. El cliente llama a `POST /auth/forgot-password` con el correo.
+2. Si la cuenta existe, la API envía un correo con el enlace `<FRONTEND_URL>/?reset=<token>`. La respuesta es la misma (`204`) exista o no la cuenta, para no revelar qué correos están registrados. El correo se envía en segundo plano, así que tampoco el tiempo de respuesta lo delata.
+3. El frontend lee el `token` del enlace y llama a `POST /auth/reset-password` con la contraseña nueva.
+
+Detalles de seguridad:
+- El token es aleatorio (`secrets.token_urlsafe(32)`). En la base de datos solo se guarda su hash SHA-256 y la fecha en que caduca.
+- Vale `RESET_MINUTES` minutos y se puede usar una sola vez. Si se pide un enlace nuevo, el anterior deja de funcionar.
+- Las sesiones abiertas (tokens JWT emitidos antes del cambio) siguen siendo válidas hasta que vencen.
+
+```bash
+curl -X POST http://127.0.0.1:8000/auth/forgot-password \
+  -H "Content-Type: application/json" \
+  -d '{"email": "ana@correo.com"}'
+
+curl -X POST http://127.0.0.1:8000/auth/reset-password \
+  -H "Content-Type: application/json" \
+  -d '{"token": "<token del enlace>", "password": "nueva-clave"}'
+```
+
+En desarrollo, sin `RESEND_API_KEY`, el enlace aparece en la consola donde corre la API.
 
 ### Plan de entrenamiento
 
@@ -189,11 +220,14 @@ alembic/                    migraciones de la base de datos
 src/progress_fitness_api/
 ├── main.py                 app, CORS, routers y manejo de errores
 ├── database.py             conexión y sesión de SQLAlchemy
-├── core/                   seguridad (JWT, bcrypt), dependencias y límite de peticiones
+├── core/                   seguridad (JWT, bcrypt, tokens de recuperación), dependencias,
+│   │                       límite de peticiones y envío de correos
+│   └── templates/          plantilla HTML del correo de recuperación
 ├── models/                 tablas (SQLAlchemy)
 ├── schemas/                validación de entrada y salida (Pydantic)
 ├── routers/                endpoints
 └── services/               lógica y consultas a la base de datos
+tests/                      pruebas con pytest
 ```
 
 ## Migraciones
@@ -225,4 +259,5 @@ Sin `TEST_DATABASE_URL`, pytest se detiene sin importar la app. Los correos no s
 
 ## Pendiente
 
-- Recuperar contraseña: `POST /auth/forgot-password` con `{ email }`, que envía por correo un enlace con un token de un solo uso, y `POST /auth/reset-password` con `{ token, password }`.
+- Cerrar las sesiones abiertas al cambiar la contraseña: guardar en el usuario la fecha del último cambio y rechazar los JWT emitidos antes.
+- Leer los orígenes de CORS desde una variable de entorno, para agregar dominios sin cambiar el código.

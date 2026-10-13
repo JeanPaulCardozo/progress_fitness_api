@@ -20,7 +20,7 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "120"))
 
-RESET_MINUTES = int(os.getenv("RESET_MINUTES","10"))
+RESET_MINUTES = int(os.getenv("RESET_MINUTES", "10"))
 
 
 def hash_password(password: str) -> str:

@@ -18,12 +18,17 @@ def test_put_creates_then_replaces_the_plan(client, db, auth):
     assert first.status_code == 200
     assert first.json()["text"] == PLAN
 
-    second = client.put("/plan/", json={"text": "# Día 1: Torso\n- Press: 3 x 8"}, headers=auth)
+    second = client.put(
+        "/plan/", json={"text": "# Día 1: Torso\n- Press: 3 x 8"}, headers=auth
+    )
     assert second.status_code == 200
     assert second.json()["id"] == first.json()["id"]  # upsert: misma fila
     assert db.query(Plan).count() == 1
 
-    assert client.get("/plan/", headers=auth).json()["text"] == "# Día 1: Torso\n- Press: 3 x 8"
+    assert (
+        client.get("/plan/", headers=auth).json()["text"]
+        == "# Día 1: Torso\n- Press: 3 x 8"
+    )
 
 
 def test_plans_are_private(client, auth, other_auth):

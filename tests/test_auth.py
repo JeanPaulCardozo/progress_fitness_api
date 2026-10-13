@@ -8,6 +8,7 @@ from progress_fitness_api.models.users import User
 
 # ── Registro y login ──
 
+
 def test_register_returns_user_without_password(client):
     res = register(client)
     assert res.status_code == 201
@@ -40,7 +41,9 @@ def test_login_ok_and_me(client):
     assert res.status_code == 200
     assert res.json()["token_type"] == "bearer"
 
-    me = client.get("/auth/me", headers={"Authorization": f"Bearer {res.json()['access_token']}"})
+    me = client.get(
+        "/auth/me", headers={"Authorization": f"Bearer {res.json()['access_token']}"}
+    )
     assert me.status_code == 200
     assert me.json()["email"] == "ana@correo.com"
 
@@ -69,6 +72,7 @@ def test_login_rate_limit(client):
 
 
 # ── Recuperar contraseña ──
+
 
 def reset_token_from(link):
     return parse_qs(urlparse(link).query)["reset"][0]
@@ -100,13 +104,17 @@ def test_reset_password_changes_it_once(client, sent_emails):
     client.post("/auth/forgot-password", json={"email": "ana@correo.com"})
     token = reset_token_from(sent_emails[0][1])
 
-    res = client.post("/auth/reset-password", json={"token": token, "password": "nueva-clave"})
+    res = client.post(
+        "/auth/reset-password", json={"token": token, "password": "nueva-clave"}
+    )
     assert res.status_code == 204
     assert login(client, password="nueva-clave").status_code == 200
     assert login(client, password="secreta123").status_code == 401
 
     # El mismo enlace no sirve dos veces
-    again = client.post("/auth/reset-password", json={"token": token, "password": "otra-clave1"})
+    again = client.post(
+        "/auth/reset-password", json={"token": token, "password": "otra-clave1"}
+    )
     assert again.status_code == 400
     assert again.json() == {"message": "El enlace no es válido o ya caducó"}
 
@@ -120,14 +128,27 @@ def test_reset_password_rejects_expired_token(client, db, sent_emails):
     user.reset_token_expires = datetime.now(timezone.utc) - timedelta(minutes=1)
     db.commit()
 
-    res = client.post("/auth/reset-password", json={"token": token, "password": "nueva-clave"})
+    res = client.post(
+        "/auth/reset-password", json={"token": token, "password": "nueva-clave"}
+    )
     assert res.status_code == 400
     assert login(client).status_code == 200  # la contraseña no cambió
 
 
 def test_reset_password_rejects_unknown_token_and_short_password(client):
-    assert client.post("/auth/reset-password", json={"token": "inventado", "password": "nueva-clave"}).status_code == 400
-    assert client.post("/auth/reset-password", json={"token": "inventado", "password": "corta"}).status_code == 422
+    assert (
+        client.post(
+            "/auth/reset-password",
+            json={"token": "inventado", "password": "nueva-clave"},
+        ).status_code
+        == 400
+    )
+    assert (
+        client.post(
+            "/auth/reset-password", json={"token": "inventado", "password": "corta"}
+        ).status_code
+        == 422
+    )
 
 
 def test_new_reset_request_invalidates_the_previous_link(client, sent_emails):
@@ -136,16 +157,37 @@ def test_new_reset_request_invalidates_the_previous_link(client, sent_emails):
     client.post("/auth/forgot-password", json={"email": "ana@correo.com"})
     first, second = (reset_token_from(link) for _, link in sent_emails)
 
-    assert client.post("/auth/reset-password", json={"token": first, "password": "nueva-clave"}).status_code == 400
-    assert client.post("/auth/reset-password", json={"token": second, "password": "nueva-clave"}).status_code == 204
+    assert (
+        client.post(
+            "/auth/reset-password", json={"token": first, "password": "nueva-clave"}
+        ).status_code
+        == 400
+    )
+    assert (
+        client.post(
+            "/auth/reset-password", json={"token": second, "password": "nueva-clave"}
+        ).status_code
+        == 204
+    )
 
 
 # ── CORS ──
 
-def test_cors_allows_only_known_origins(client):
-    preflight = {"Access-Control-Request-Method": "GET", "Access-Control-Request-Headers": "authorization"}
-    ok = client.options("/auth/me", headers={"Origin": "https://jeanpaulcardozo.github.io", **preflight})
-    assert ok.headers.get("access-control-allow-origin") == "https://jeanpaulcardozo.github.io"
 
-    blocked = client.options("/auth/me", headers={"Origin": "https://otra-web.com", **preflight})
+def test_cors_allows_only_known_origins(client):
+    preflight = {
+        "Access-Control-Request-Method": "GET",
+        "Access-Control-Request-Headers": "authorization",
+    }
+    ok = client.options(
+        "/auth/me", headers={"Origin": "https://jeanpaulcardozo.github.io", **preflight}
+    )
+    assert (
+        ok.headers.get("access-control-allow-origin")
+        == "https://jeanpaulcardozo.github.io"
+    )
+
+    blocked = client.options(
+        "/auth/me", headers={"Origin": "https://otra-web.com", **preflight}
+    )
     assert "access-control-allow-origin" not in blocked.headers

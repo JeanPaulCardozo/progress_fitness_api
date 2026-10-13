@@ -6,8 +6,15 @@ from progress_fitness_api.models.sets import Set
 
 
 def a_set(**changes):
-    return {"date": date.today().isoformat(), "day": 1, "exercise": "Sentadilla", "reps": 8,
-            "weight": 60, "feel": "Moderado", **changes}
+    return {
+        "date": date.today().isoformat(),
+        "day": 1,
+        "exercise": "Sentadilla",
+        "reps": 8,
+        "weight": 60,
+        "feel": "Moderado",
+        **changes,
+    }
 
 
 def test_sets_require_login(client):
@@ -23,7 +30,9 @@ def test_create_and_list_sets(client, db, auth):
     assert body["exercise"] == "Sentadilla"
     assert body["weight"] == 60
     assert body["notes"] == "buena técnica"
-    assert db.get(Set, body["id"]).volume == 480  # 60 kg × 8 reps, lo calcula el servidor
+    assert (
+        db.get(Set, body["id"]).volume == 480
+    )  # 60 kg × 8 reps, lo calcula el servidor
 
     listed = client.get("/sets/", headers=auth).json()
     assert [s["id"] for s in listed] == [body["id"]]
@@ -34,13 +43,16 @@ def test_all_feel_values_are_accepted(client, auth, feel):
     assert client.post("/sets/", json=a_set(feel=feel), headers=auth).status_code == 201
 
 
-@pytest.mark.parametrize("changes, field", [
-    ({"day": 0}, "day"),
-    ({"day": 8}, "day"),
-    ({"feel": "Al fallo"}, "feel"),
-    ({"date": (date.today() + timedelta(days=3)).isoformat()}, "date"),
-    ({"date": "09/10/2026"}, "date"),
-])
+@pytest.mark.parametrize(
+    "changes, field",
+    [
+        ({"day": 0}, "day"),
+        ({"day": 8}, "day"),
+        ({"feel": "Al fallo"}, "feel"),
+        ({"date": (date.today() + timedelta(days=3)).isoformat()}, "date"),
+        ({"date": "09/10/2026"}, "date"),
+    ],
+)
 def test_invalid_sets_are_rejected(client, auth, changes, field):
     res = client.post("/sets/", json=a_set(**changes), headers=auth)
     assert res.status_code == 422
