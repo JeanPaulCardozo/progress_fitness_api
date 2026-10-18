@@ -27,7 +27,10 @@ Copia `src/progress_fitness_api/.env_example` a `src/progress_fitness_api/.env` 
 | `SECRET_KEY` | Clave para firmar los tokens JWT. Debe ser larga y secreta | `python -c "import secrets; print(secrets.token_hex(32))"` |
 | `ALGORITHM` | Algoritmo del JWT (por defecto `HS256`) | `HS256` |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Duración del token (por defecto 120) | `120` |
-| `FRONTEND_URL` | Dirección del frontend, sin barra final. Se usa para armar el enlace del correo de recuperación | `http://localhost:5174` |
+| `FRONTEND_URL` | Dirección del frontend, sin barra final. Se usa en el enlace del correo de recuperación y para volver a la app tras el login con Google | `http://localhost:5173` |
+| `API_URL` | Dirección pública de esta API, sin barra final. Con ella se arma la URL de callback de Google | `http://localhost:8000` |
+| `GOOGLE_CLIENT_ID` | ID de cliente de OAuth de Google Cloud | `1234-abc.apps.googleusercontent.com` |
+| `GOOGLE_CLIENT_SECRET` | Secreto de ese cliente. Nunca lo subas al repositorio | `GOCSPX-xxxxxxxx` |
 | `RESET_MINUTES` | Minutos que vale el enlace de recuperación (por defecto 10). El correo muestra este mismo valor | `10` |
 | `RESEND_API_KEY` | Clave de [Resend](https://resend.com) para enviar correos. Si está vacía, el enlace se imprime en la consola | `re_xxxxxxxx` |
 | `EMAIL_FROM` | Remitente de los correos | `ProgressFit <onboarding@resend.dev>` |
@@ -50,7 +53,7 @@ uv run alembic upgrade head
 uv run fastapi dev src/progress_fitness_api/main.py
 ```
 
-La API queda en `http://127.0.0.1:8000`, con documentación interactiva (Swagger) en `http://127.0.0.1:8000/docs`.
+La API queda en `http://localhost:8000`, con documentación interactiva (Swagger) en `http://localhost:8000/docs`.
 
 ### Con Docker
 
@@ -83,7 +86,7 @@ Si PostgreSQL corre en tu máquina y no en otro contenedor, dentro de `DATABASE_
   ```
   Los errores de validación (`422`) indican el campo: `"day: Input should be less than or equal to 7"`.
 - `/plan/` y `/sets/` llevan **barra final**. Sin ella, FastAPI responde con una redirección `307`.
-- Desde el navegador, CORS solo permite dos orígenes: `https://jeanpaulcardozo.github.io` (la app publicada) y `http://localhost:5174` (el frontend en desarrollo). Para agregar otro, edita `allow_origins` en `main.py`. CORS no afecta a curl, Postman ni a otros servidores: lo que protege los datos es el token.
+- Desde el navegador, CORS solo permite el origen `https://jeanpaulcardozo.github.io` (la app publicada). Para usar el frontend en local, agrega su origen (por ejemplo `http://localhost:5173`) a `allow_origins` en `main.py`. CORS no afecta a curl, Postman ni a otros servidores: lo que protege los datos es el token.
 
 ### Autenticación
 
@@ -94,6 +97,8 @@ Si PostgreSQL corre en tu máquina y no en otro contenedor, dentro de `DATABASE_
 | GET | `/auth/me` 🔒 | | `200` con el usuario |
 | POST | `/auth/forgot-password` | `{ email }` | `204` siempre, exista o no la cuenta |
 | POST | `/auth/reset-password` | `{ token, password }` | `204`. `400` si el enlace no es válido, ya caducó o ya se usó |
+| GET | `/auth/google/login` | | Redirige a Google. Se abre navegando, no con `fetch` |
+| GET | `/auth/google/callback` | | Lo llama Google. Redirige al frontend con `#token=` o `#error=` |
 
 - `password` necesita al menos 8 caracteres y `email` tiene que ser un correo válido.
 - El registro **no** devuelve token: después de registrarse hay que hacer login.
@@ -102,12 +107,12 @@ Si PostgreSQL corre en tu máquina y no en otro contenedor, dentro de `DATABASE_
 
 ```bash
 # Registro
-curl -X POST http://127.0.0.1:8000/auth/register \
+curl -X POST http://localhost:8000/auth/register \
   -H "Content-Type: application/json" \
   -d '{"name": "Ana", "email": "ana@correo.com", "password": "secreta123"}'
 
 # Login
-curl -X POST http://127.0.0.1:8000/auth/login \
+curl -X POST http://localhost:8000/auth/login \
   -d "username=ana@correo.com&password=secreta123"
 # → {"access_token": "eyJhbGciOi...", "token_type": "bearer"}
 ```
@@ -127,19 +132,43 @@ Usuario:
 Detalles de seguridad:
 - El token es aleatorio (`secrets.token_urlsafe(32)`). En la base de datos solo se guarda su hash SHA-256 y la fecha en que caduca.
 - Vale `RESET_MINUTES` minutos y se puede usar una sola vez. Si se pide un enlace nuevo, el anterior deja de funcionar.
-- Las sesiones abiertas (tokens JWT emitidos antes del cambio) siguen siendo válidas hasta que vencen.
+- Al cambiar la contraseña se cierran las sesiones abiertas: los JWT emitidos antes del cambio responden `401`. Para eso los tokens incluyen `iat` (fecha de emisión, con decimales) y el usuario guarda `password_changed_at`.
 
 ```bash
-curl -X POST http://127.0.0.1:8000/auth/forgot-password \
+curl -X POST http://localhost:8000/auth/forgot-password \
   -H "Content-Type: application/json" \
   -d '{"email": "ana@correo.com"}'
 
-curl -X POST http://127.0.0.1:8000/auth/reset-password \
+curl -X POST http://localhost:8000/auth/reset-password \
   -H "Content-Type: application/json" \
   -d '{"token": "<token del enlace>", "password": "nueva-clave"}'
 ```
 
 En desarrollo, sin `RESEND_API_KEY`, el enlace aparece en la consola donde corre la API.
+
+### Iniciar sesión con Google
+
+Usa OAuth 2.0 (flujo con código de autorización). El navegador nunca recibe tokens de Google: la API confirma con Google quién es el usuario y le entrega **su propio JWT**, el mismo del login normal.
+
+1. El frontend **navega** a `GET /auth/google/login`. La API genera un `state` aleatorio, lo guarda en la cookie `oauth_state` (10 minutos, `HttpOnly`) y redirige a la pantalla de Google.
+2. El usuario elige su cuenta y acepta. Google redirige a `GET /auth/google/callback?code=...&state=...`.
+3. La API comprueba que el `state` coincide con la cookie (protección contra CSRF), canjea el `code` en Google usando el `client_secret` y obtiene el `sub`, el correo y el nombre del usuario.
+4. Busca o crea el usuario:
+   - Si ya entró antes con Google, lo encuentra por `google_id` (el `sub`, que no cambia aunque cambie el correo).
+   - Si ya tenía cuenta con el mismo correo, le agrega el `google_id` y desde entonces puede entrar de las dos formas.
+   - Si es nuevo, lo crea **sin contraseña**. Puede crear una después con "¿Olvidaste tu contraseña?".
+   - Solo se aceptan correos que Google marca como verificados.
+5. Redirige al frontend: `<FRONTEND_URL>/#token=<jwt>` si todo salió bien, o `#error=google` / `#error=google_email` si falló. El resultado va en el fragmento (`#`) porque nunca se envía a ningún servidor.
+
+Un usuario sin contraseña no puede usar `POST /auth/login`: recibe el mismo `401` que con datos incorrectos.
+
+**Configuración en Google Cloud** ([Google Auth Platform](https://console.cloud.google.com/auth/overview)):
+- *Audience:* tipo Externo. Mientras la app esté en modo de prueba, solo pueden entrar los correos de la lista de usuarios de prueba. Para abrirla a todos, publícala; con los permisos básicos (`openid email profile`) no requiere verificación.
+- *Clients:* un cliente de tipo "Aplicación web" con estas URI de redireccionamiento, exactamente así:
+  - `http://localhost:8000/auth/google/callback`
+  - `https://progressfitnessapi-production.up.railway.app/auth/google/callback`
+
+En local, abre el login con el mismo host que `API_URL` (`localhost`, no `127.0.0.1`). Si no, el navegador guarda la cookie del `state` en un host y Google vuelve al otro, y el login falla con `#error=google`. Los motivos de cada fallo quedan en la consola de la API.
 
 ### Plan de entrenamiento
 
@@ -155,7 +184,7 @@ Cada usuario tiene **un solo plan**, guardado como texto libre. La API no lo int
 El `404` de `GET /plan/` es un caso normal (un usuario nuevo todavía no tiene plan), no un fallo. Trátalo como "sin plan".
 
 ```bash
-curl -X PUT http://127.0.0.1:8000/plan/ \
+curl -X PUT http://localhost:8000/plan/ \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"text": "# Día 1: Pierna\n- Sentadilla: 4 x 6–8, descanso 2 min"}'
@@ -186,7 +215,7 @@ Campos para crear una serie:
 La respuesta incluye además `id`, `user_id` y `created_at` (fecha y hora ISO 8601 en UTC). El volumen (`weight × reps`) se calcula y se guarda en la base de datos, pero todavía no se devuelve en la respuesta.
 
 ```bash
-curl -X POST http://127.0.0.1:8000/sets/ \
+curl -X POST http://localhost:8000/sets/ \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"date": "2026-10-09", "day": 1, "exercise": "Sentadilla", "reps": 8, "weight": 60, "feel": "Moderado"}'
@@ -220,8 +249,8 @@ alembic/                    migraciones de la base de datos
 src/progress_fitness_api/
 ├── main.py                 app, CORS, routers y manejo de errores
 ├── database.py             conexión y sesión de SQLAlchemy
-├── core/                   seguridad (JWT, bcrypt, tokens de recuperación), dependencias,
-│   │                       límite de peticiones y envío de correos
+├── core/                   seguridad (JWT, bcrypt, tokens de recuperación), login con Google,
+│   │                       dependencias, límite de peticiones y envío de correos
 │   └── templates/          plantilla HTML del correo de recuperación
 ├── models/                 tablas (SQLAlchemy)
 ├── schemas/                validación de entrada y salida (Pydantic)
@@ -259,5 +288,6 @@ Sin `TEST_DATABASE_URL`, pytest se detiene sin importar la app. Los correos no s
 
 ## Pendiente
 
-- Cerrar las sesiones abiertas al cambiar la contraseña: guardar en el usuario la fecha del último cambio y rechazar los JWT emitidos antes.
+- Iniciar sesión con GitHub, con el mismo patrón que Google.
+- Pruebas con pytest para el login con Google (simulando las respuestas de Google).
 - Leer los orígenes de CORS desde una variable de entorno, para agregar dominios sin cambiar el código.
