@@ -20,6 +20,9 @@ os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ["SECRET_KEY"] = "test-secret"
 os.environ["RESET_MINUTES"] = "30"
 os.environ["FRONTEND_URL"] = "http://front.test"
+os.environ["API_URL"] = "http://api.test"
+os.environ["GOOGLE_CLIENT_ID"] = "test-client-id"
+os.environ["GOOGLE_CLIENT_SECRET"] = "test-client-secret"
 
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import create_engine, text  # noqa: E402
