@@ -40,7 +40,7 @@ def get_create_google_user(db: Session, info: dict) -> User | None:
 
     if user is None:
         user = User(
-            name=info.get("name") or info["email"].split("@"), email=info["email"]
+            name=info.get("name") or info["email"].split("@")[0], email=info["email"]
         )
         db.add(user)
 
