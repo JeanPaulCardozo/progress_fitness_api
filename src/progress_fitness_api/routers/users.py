@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Request, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.responses import RedirectResponse
 
 from sqlalchemy.orm import Session
 
@@ -21,10 +22,21 @@ from progress_fitness_api.services import user_service
 from progress_fitness_api.models.users import User
 from progress_fitness_api.core.limiter import Limit
 from progress_fitness_api.core.email import send_reset_email
+from progress_fitness_api.core.google import google_login_url, fetch_google_user
 
 import os
 
+import secrets
+
+import httpx
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
 FRONTEND_URL = os.getenv("FRONTEND_URL")
+API_URL = os.getenv("API_URL", "")
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -81,6 +93,61 @@ def restart_password(data: ResetPasswordIn, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=400, detail="El enlace no es válido o ya caducó"
         )
+
+
+@router.get("/google/login")
+def google_login():
+    state = secrets.token_urlsafe(16)
+    response = RedirectResponse(google_login_url(state))
+
+    response.set_cookie(
+        "oauth_state",
+        state,
+        max_age=600,
+        httponly=True,
+        samesite="lax",
+        secure=API_URL.startswith("https"),
+    )
+    return response
+
+
+@router.get("/google/callback")
+def google_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    db: Session = Depends(get_db),
+):
+
+    def back_to_app(fragment: str) -> RedirectResponse:
+        response = RedirectResponse(f"{FRONTEND_URL}/#{fragment}")
+        response.delete_cookie("oauth_state")
+
+        return response
+
+    expected = request.cookies.get("oauth_state")
+    if (
+        not code
+        or not state
+        or not expected
+        or not secrets.compare_digest(state, expected)
+    ):
+
+        return back_to_app("error=google")
+
+    try:
+        info = fetch_google_user(code)
+    except httpx.HTTPError as e:
+        return back_to_app("error=google")
+
+    user = user_service.get_create_google_user(db, info)
+
+    if user is None:
+        return back_to_app("error=google_email")
+
+    token = create_access_token(data={"sub": str(user.id)})
+
+    return back_to_app(f"token={token}")
 
 
 @router.get("/me", response_model=UserOut, status_code=200)
