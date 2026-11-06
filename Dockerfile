@@ -24,4 +24,7 @@ COPY --from=builder /app/alembic.ini ./
 
 ENV PATH="/app/.venv/bin:$PATH"
 
-CMD ["sh", "-c", "uvicorn progress_fitness_api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+RUN useradd --create-home appuser
+USER appuser
+
+CMD ["sh", "-c", "uvicorn progress_fitness_api.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*'"]
