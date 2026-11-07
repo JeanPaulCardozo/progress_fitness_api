@@ -1,0 +1,39 @@
+services:
+  api:
+    build: .
+    image: progress_fitness_api_image:1.0.0
+    container_name: progress_fitness_api_container
+    restart: unless-stopped
+    env_file:
+      - src/progress_fitness_api/.env.prod
+    ports:
+      - "127.0.0.1:8000:8000"
+    networks:
+      - progress_fitness_network
+    depends_on:
+      db:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+  db:
+    image: postgres:17
+    container_name: progress_fitness_db
+    restart: unless-stopped
+    env_file:
+      - src/progress_fitness_api/.env.db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - progress_fitness_network
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  pgdata:
+
+networks:
+  progress_fitness_network:

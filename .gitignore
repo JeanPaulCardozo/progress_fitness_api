@@ -12,6 +12,7 @@ wheels/
 # Secretos
 .env
 .env.prod
+.env.db
 
 # Caché de herramientas
 .pytest_cache/
